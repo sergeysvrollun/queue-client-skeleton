@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Handler;
 
+use ArrayObject;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -31,9 +32,19 @@ class QueueCreateHandler implements RequestHandlerInterface
             $this->queueClient->deleteQueue($queue);
         }
         $this->queueClient->createQueue('test');
-        $test1[] = $this->queueClient->isEmpty('test');
         $this->queueClient->addMessage('test', 'test');
-        $test1[] = $this->queueClient->isEmpty('test');
-        return new JsonResponse(['text' => print_r($test1, true)]);
+        $this->queueClient->addMessage('test', 'test2');
+        $this->queueClient->addMessage('test', 'test2333');
+        $messages = $this->queueClient->getMessages('test', 1);
+        var_dump($messages); die;
+//        $message = array_pop($messages);
+//        $this->queueClient->deleteMessage('test', $message);
+//        /**
+//         * @var ArrayObject[]
+//         */
+//        foreach ($messages as $message) {
+//            print_r($message->id); die;
+//        }
+        return new JsonResponse(['text' => print_r($messages, true)]);
     }
 }

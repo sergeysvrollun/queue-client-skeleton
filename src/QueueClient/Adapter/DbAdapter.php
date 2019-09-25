@@ -16,6 +16,11 @@ use Zend\Db\Adapter\Adapter;
 use Zend\Db\Adapter\Driver\ResultInterface;
 use Zend\Db\ResultSet\ResultSet;
 use Zend\Db\Sql\Expression;
+use Zend\Db\Sql\Predicate\IsNull;
+use Zend\Db\Sql\Predicate\Predicate;
+use Zend\Db\Sql\Predicate\PredicateSet;
+use Zend\Db\Sql\Predicate\Expression as PredicateExpression;
+use Zend\Db\Sql\Where;
 use Zend\Db\TableGateway\Feature\RowGatewayFeature;
 use Zend\Db\TableGateway\TableGateway;
 use Zend\Db\Metadata\Source\Factory;
@@ -101,12 +106,15 @@ class DbAdapter extends AbstractAdapter implements AdapterInterface
             ),
             'priority_level' => $priority->getLevel(),
             'time_in_flight' => null,
-            'delayed_until'  => date('Y-m-d H:i:s', time() + $delaySeconds),
+            'delayed_until'  => time() + $delaySeconds,
             'body'           => serialize($message),
         ];
-        $sql = "INSERT INTO $tableName (id, priority_level, time_in_flight, delayed_until, body) 
-            VALUES ( :id, :priority_level, :time_in_flight, :delayed_until, :body)";
-        $this->db->query($sql, $new_message);
+        $sql = new Sql($this->db);
+        $select = $sql->insert()
+            ->into($tableName)
+            ->values($new_message);
+        $statement = $sql->prepareStatementForSqlObject($select);
+        $statement->execute();
         return $this;
     }
 
@@ -154,29 +162,42 @@ class DbAdapter extends AbstractAdapter implements AdapterInterface
                 . " doesn't exist, please create it before using it."
             );
         }
-        return ['not exists'];
         $tableName = $this->prepareTableName($queueName);
-        //$table = new TableGateway($tableName, $this->db, new RowGatewayFeature('id'));
-        $sql = "SELECT * FROM $tableName WHERE
-            (((unix_timestamp(now()) - unix_timestamp(time_in_flight)) > "
-            . self::MAX_TIME_IN_FLIGHT . " OR time_in_flight IS NULL)
-            AND unix_timestamp(delayed_until) <= unix_timestamp(now())) ";
+        $sql = new Sql($this->db);
+        $select = $sql->select()
+            ->from($tableName)
+            ->where(
+                [
+                    new PredicateSet(
+                        [
+                            new PredicateExpression('unix_timestamp(now()) - time_in_flight > ?', self::MAX_TIME_IN_FLIGHT),
+                            new IsNull('time_in_flight'),
+                        ],
+                        PredicateSet::COMBINED_BY_OR
+                    ),
+                    new PredicateExpression('delayed_until <= unix_timestamp(now())'),
+                ]
+            );
         if (null !== $priority) {
-            $sql .= " AND priority_level = " . $priority->getLevel() . " ";
+            $select->where(['priority_level' => $priority->getLevel()]);
         }
         if ($nbMsg) {
-            $sql .= " LIMIT $nbMsg";
+            $select->limit($nbMsg);
         }
-
-        $rows = $this->db->query($sql, Adapter::QUERY_MODE_EXECUTE);
-
-        print_r($rows);
+        $statement = $sql->prepareStatementForSqlObject($select);
+        $results = $statement->execute();
         $messages = [];
-        foreach ($rows as $message) {
-            $message['time_in_flight'] = time();
-            $message['body'] = unserialize($message['body']);
-            $message['priority'] = $message['priority_level'];
-            $messages[] = $message;
+        if ($results instanceof ResultInterface && $results->isQueryResult()) {
+            $resultSet = new ResultSet;
+            $resultSet->initialize($results);
+            foreach ($resultSet as $result) {
+                $message = [];
+                $message['id'] = $result->id;
+                $message['body'] = unserialize($result->body);
+                $message['time_in_flight'] = time();
+                $message['priority'] = intval($result->priority_level);
+                $messages[] = $message;
+            }
         }
         return $messages;
     }
@@ -224,14 +245,16 @@ class DbAdapter extends AbstractAdapter implements AdapterInterface
         }
 
         $tableName = $this->prepareTableName($queueName);
-        $sql = "DELETE FROM $tableName WHERE id = :id ";
-        $params = ['id' => $message['id']];
+        $sql = new Sql($this->db);
+        $delete = $sql->delete($tableName)
+            ->where(['id' => $message['id']]);
         if (null !== $priority) {
-            $params[':priority_level'] = $priority->getLevel();
-            $sql .= " AND priority_level = :priority_level";
+            $delete->where(['priority_level' => $priority->getLevel()]);
         }
+        $statement = $sql->prepareStatementForSqlObject($delete);
+        $results = $statement->execute();
+        var_dump($results);
 
-        $this->db->query($sql, $params)->execute();
         return $this;
     }
 
@@ -289,15 +312,23 @@ class DbAdapter extends AbstractAdapter implements AdapterInterface
         }
 
         $tableName = $this->prepareTableName($queueName);
-        $sql = "SELECT count(*) FROM $tableName WHERE 
-            ((unix_timestamp(now()) - unix_timestamp(time_in_flight)) > :max_time_in_flight || time_in_flight IS NULL) ";
-        $params = ['max_time_in_flight' => self::MAX_TIME_IN_FLIGHT];
+        $sql = new Sql($this->db);
+        $select = $sql->select()
+            ->columns(['total' => new Expression('COUNT(*)')])
+            ->from($tableName)
+            ->where(
+                [
+                    '(unix_timestamp(now()) - unix_timestamp(time_in_flight)) > ?' => self::MAX_TIME_IN_FLIGHT,
+                    'time_in_flight'                                               => null,
+                ], Predicate::OP_OR
+            );
         if (null !== $priority) {
-            $params[':priority_level'] = $priority->getLevel();
-            $sql .= "AND priority_level = :priority_level";
+            $select->where(['priority_level' => $priority->getLevel()]);
         }
-
-        return $this->db->query($sql, $params);
+        $statement = $sql->prepareStatementForSqlObject($select);
+        $results = $statement->execute();
+        $count = intval(($results->current())['total']);
+        return $count;
     }
 
     /**
@@ -339,8 +370,8 @@ class DbAdapter extends AbstractAdapter implements AdapterInterface
             `id` VARCHAR(45) NOT NULL, 
             `priority_level` int(11) NOT NULL, 
             `body` text COLLATE utf8_unicode_ci,
-            `time_in_flight` datetime DEFAULT NULL,
-            `delayed_until` datetime DEFAULT NULL,
+            `time_in_flight` int(11) DEFAULT NULL,
+            `delayed_until` int(11) DEFAULT NULL,
         PRIMARY KEY (`id`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;";
         $this->db->query($sql, Adapter::QUERY_MODE_EXECUTE);
