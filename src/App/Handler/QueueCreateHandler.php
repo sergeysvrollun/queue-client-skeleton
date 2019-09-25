@@ -50,24 +50,29 @@ class QueueCreateHandler implements RequestHandlerInterface
 //        die;
 
 
-//        $queueClient->createQueue('testQueueOne');
-//        $queueClient->createQueue('testQueueTwo');
-//        $queueClient->addAlias('testQueueOne', 'queueAlias');
-//        $queueClient->addAlias('testQueueTwo', 'queueAlias');
-//        print_r([['queueAlias' => ['testQueueOne', 'testQueueTwo']], $queueClient->getAliases()]);
-//        die;
-
-
-
         $queueClient->createQueue('testQueueOne');
         $queueClient->createQueue('testQueueTwo');
-        $queueClient->addAlias('testQueueOne', 'queueAliasOne');
-        $queueClient->addAlias('testQueueTwo', 'queueAliasOne');
-        $queueClient->addAlias('testQueueTwo', 'queueAliasTwo');
-        print_r([
-            ['queueAliasOne' => ['testQueueOne', 'testQueueTwo'], 'queueAliasTwo' => ['testQueueTwo']],
-            $queueClient->getAliases()
-        ]);
+        $queueClient->addAlias('testQueueOne', 'queueAlias');
+        $queueClient->addAlias('testQueueTwo', 'queueAlias');
+        print_r([['queueAlias' => ['testQueueOne', 'testQueueTwo']], $queueClient->getAliases()]);
+        die;
+
+
+
+//        $queueClient->createQueue('testQueueOne');
+//        $queueClient->createQueue('testQueueTwo');
+//        $queueClient->addAlias('testQueueOne', 'queueAliasOne');
+//        $queueClient->addAlias('testQueueTwo', 'queueAliasOne');
+//        $queueClient->addAlias('testQueueTwo', 'queueAliasTwo');
+//
+//        $mockAliases = ['queueAliasOne' => ['testQueueOne', 'testQueueTwo'], 'queueAliasTwo' => ['testQueueTwo']];
+//        $aliases = $queueClient->getAliases();
+//        sort($mockAliases);
+//        sort($aliases);
+//        print_r([
+//            $aliases ,
+//            $mockAliases,
+//        ]);
         die;
 
 

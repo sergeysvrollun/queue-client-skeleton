@@ -249,9 +249,7 @@ class DbAdapter extends AbstractAdapter implements AdapterInterface
             $delete->where(['priority_level' => $priority->getLevel()]);
         }
         $statement = $sql->prepareStatementForSqlObject($delete);
-        $results = $statement->execute();
-        var_dump($results);
-
+        $statement->execute();
         return $this;
     }
 
@@ -391,11 +389,11 @@ class DbAdapter extends AbstractAdapter implements AdapterInterface
             throw new InvalidArgumentException('Target queue name empty or not defined.');
         }
 
-        $sourceTableName = $this->prepareTableName($sourceQueueName);
-        $targetTableName = $this->prepareTableName($targetQueueName);
+        $platform = $this->db->getPlatform();
+        $sourceTableName = $platform->quoteIdentifier($this->prepareTableName($sourceQueueName));
+        $targetTableName = $platform->quoteIdentifier($this->prepareTableName($targetQueueName));
         $sql = "ALTER TABLE $sourceTableName RENAME TO $targetTableName;";
         $this->db->query($sql);
-
         return $this;
     }
 
@@ -428,8 +426,14 @@ class DbAdapter extends AbstractAdapter implements AdapterInterface
             );
         }
         $tableName = $this->prepareTableName($queueName);
-        $this->db->query("DELETE FROM $tableName WHERE priority_level = :priority_level", [':priority_level' => $priority->getLevel()]);
-
+        $sql = new Sql($this->db);
+        $select = $sql->delete()
+            ->from($tableName);
+        if (null !== $priority) {
+            $select->where(['priority_level' => $priority->getLevel()]);
+        }
+        $statement = $sql->prepareStatementForSqlObject($select);
+        $statement->execute();
         return $this;
     }
 

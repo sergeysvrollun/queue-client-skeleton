@@ -6,54 +6,33 @@ namespace QueueClientTest\Adapter;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
-use Prophecy\Prophecy\ObjectProphecy;
 use Psr\Container\ContainerInterface;
+use ReputationVIP\QueueClient\Adapter\Exception\InvalidMessageException;
 use ReputationVIP\QueueClient\Adapter\Exception\QueueAccessException;
 use ReputationVIP\QueueClient\Exception\QueueAliasException;
+use ReputationVIP\QueueClient\PriorityHandler\ThreeLevelPriorityHandler;
 use ReputationVIP\QueueClient\QueueClient;
 
 class QueueClientTest extends TestCase
 {
-    /** @var ContainerInterface|ObjectProphecy */
-    public $container;
-    public $queueClient;
-
     public function getQueueClient(): QueueClient
     {
-        return $this->container->get('Application\QueueClient');
+        /** @var ContainerInterface $container */
+        global $container;
+        return $container->build('Application\QueueClient');
     }
-
-//    /**
-//     * @param array $a
-//     * @param array $b
-//     *
-//     * @return bool
-//     */
-//    public function isSimilarArrays(array $a, array $b): bool
-//    {
-//        if (count(array_diff_assoc($a, $b))) {
-//            return false;
-//        }
-//        foreach ($a as $k => $v) {
-//            if ($v !== $b[$k]) {
-//                return false;
-//            }
-//        }
-//        return true;
-//    }
 
     /**
      * @return void
      */
     public function setUp(): void
     {
-        /** @var ContainerInterface $container */
-        global $container;
-        $this->container = $container;
         $queueClient = $this->getQueueClient();
-        $queueList = $queueClient->listQueues();
-        foreach ($queueList as $queue) {
+        foreach ($queueClient->listQueues() as $queue) {
             $queueClient->deleteQueue($queue);
+        }
+        foreach ($queueClient->getAliases() as $alias) {
+            $queueClient->removeAlias($alias);
         }
     }
 
@@ -63,36 +42,14 @@ class QueueClientTest extends TestCase
     public function tearDown(): void
     {
         $queueClient = $this->getQueueClient();
-        $queueList = $queueClient->listQueues();
-        foreach ($queueList as $queue) {
+        foreach ($queueClient->listQueues() as $queue) {
             $queueClient->deleteQueue($queue);
+        }
+        foreach ($queueClient->getAliases() as $alias) {
+            $queueClient->removeAlias($alias);
         }
     }
 
-//    public function testCreateDeleteQueue()
-//    {
-//        $queueClient = $this->getQueueClient();
-//        $this->assertCount(0, $queueClient->listQueues());
-//        $queueClient->createQueue('testQueue');
-//        $this->assertCount(1, $queueClient->listQueues());
-//        $queueClient->createQueue('testQueue2');
-//        $this->assertCount(2, $queueClient->listQueues());
-//        $queueClient->deleteQueue('testQueue');
-//        $this->assertCount(1, $queueClient->listQueues());
-//        $queueClient->deleteQueue('testQueue2');
-//        $this->assertCount(0, $queueClient->listQueues());
-//    }
-
-//    public function testAddRemoveMessage()
-//    {
-//        $queueClient = $this->getQueueClient();
-//        $queueClient->createQueue('testQueue');
-//        $this->assertTrue($queueClient->isEmpty('testQueue'));
-//        $queueClient->addMessage('testQueue', 'testMessage');
-//        $this->assertFalse($queueClient->isEmpty('testQueue'));
-//        $queueClient->deleteMessage('testQueue', 'testMessage');
-//        $this->assertTrue($queueClient->isEmpty('testQueue'));
-//    }
 
     public function testQueueClientCreateQueueWithSpace()
     {
@@ -101,36 +58,15 @@ class QueueClientTest extends TestCase
         $queueClient->createQueue('test Queue One');
     }
 
-
-//    public function testQueueClientAddMessageWithAlias(MemoryAdapter $adapter)
-//    {
-//        $this
-//            ->given($this->newTestedInstance($adapter))
-//            ->when(
-//                $this->testedInstance->createQueue('testQueueOne'),
-//                $this->testedInstance->createQueue('testQueueTwo'),
-//                $this->testedInstance->addAlias('testQueueOne', 'queueAlias')
-//            )
-//            ->then
-//            ->object($this->testedInstance->addMessage('queueAlias', 'testMessage'))->isTestedInstance()
-//            ->when($this->testedInstance->addAlias('testQueueTwo', 'queueAlias'))
-//            ->then
-//            ->object($this->testedInstance->addMessage('queueAlias', 'testMessage'))->isTestedInstance()
-//        ;
-//    }
-
-
     public function testQueueClientAddMessageWithAlias()
     {
         $queueClient = $this->getQueueClient();
         $queueClient->createQueue('testQueueOne');
         $queueClient->createQueue('testQueueTwo');
         $queueClient->addAlias('testQueueOne', 'queueAlias');
-        //$queueClient->addMessage('queueAlias', 'testMessage'); //isTestedInstance()
         $this->assertSame($queueClient, $queueClient->addMessage('queueAlias', 'testMessage'));
         $queueClient->addAlias('testQueueTwo', 'queueAlias');
         $this->assertSame($queueClient, $queueClient->addMessage('queueAlias', 'testMessage'));
-        //$queueClient->addMessage('queueAlias', 'testMessage'); //isTestedInstance()
     }
 
     public function testQueueClientAddMessage()
@@ -181,19 +117,56 @@ class QueueClientTest extends TestCase
         $queueClient->deleteMessage('queueAlias', ['testMessage']); // exception
     }
 
-    public function testQueueClientDeleteMessage()
+
+    public function testFileAdapterDeleteMessageWithEmptyQueueName()
     {
         $queueClient = $this->getQueueClient();
-
         $queueClient->createQueue('testQueue');
-        $this->assertSame($queueClient, $queueClient->deleteMessage('testQueue', 'testMessage'));// isTestedInstance();
+        $this->expectException(InvalidArgumentException::class);
+        $queueClient->deleteMessage('', []);
     }
 
-    public function testQueueClientDeleteMessages()
+    public function testFileAdapterDeleteMessageWithNoQueueFile()
     {
         $queueClient = $this->getQueueClient();
+        $queueClient->createQueue('testQueue');
+        $priorityHandler = new ThreeLevelPriorityHandler();
+        $this->assertSame($queueClient, $queueClient->deleteMessage('testQueue', ['id' => 'testQueue-HIGH559f77704e87c5.40358915', 'priority' => $priorityHandler->getHighest()->getLevel()]));
 
-        $this->assertSame($queueClient, $queueClient->deleteMessages('testQueue', ['testMessageOne', 'testMessageTwo', 'testMessageThree'])); //isTestedInstance();
+    }
+
+    public function testFileAdapterDeleteMessageWithNoMessage()
+    {
+        $queueClient = $this->getQueueClient();
+        $queueClient->createQueue('testQueue');
+        $this->expectException(InvalidMessageException::class);
+        $queueClient->deleteMessage('testQueue', []);
+    }
+
+    public function testFileAdapterDeleteMessageWithNoIdField()
+    {
+        $queueClient = $this->getQueueClient();
+        $queueClient->createQueue('testQueue');
+        $priorityHandler = new ThreeLevelPriorityHandler();
+        $this->expectException(InvalidMessageException::class);
+        $queueClient->deleteMessage('testQueue', ['priority' => $priorityHandler->getHighest()->getLevel()]);
+    }
+
+    public function testFileAdapterDeleteMessageWithNotPriorityField()
+    {
+        $queueClient = $this->getQueueClient();
+        $queueClient->createQueue('testQueue');
+        $this->expectException(InvalidMessageException::class);
+        $queueClient->deleteMessage('testQueue', ['id' => 'testQueue-HIGH559f77704e87c5.40358915']);
+
+    }
+
+    public function testFileAdapterDeleteMessageWithBadMessageType()
+    {
+        $queueClient = $this->getQueueClient();
+        $queueClient->createQueue('testQueue');
+        $this->expectException(InvalidMessageException::class);
+        $queueClient->deleteMessage('testQueue', 'message');
     }
 
     public function testQueueClientIsEmptyWithAlias()
@@ -306,8 +279,10 @@ class QueueClientTest extends TestCase
         $queueClient->createQueue('testQueueOne');
         $queueClient->createQueue('testRegexQueueTwo');
         $queueClient->createQueue('testQueueTwo');
-        $this->assertEquals(['testQueue', 'testRegexQueue', 'testQueueOne', 'testRegexQueueTwo', 'testQueueTwo'], $queueClient->listQueues());
-        $this->assertEquals(['testRegexQueue', 'testRegexQueueTwo'], $queueClient->listQueues('/.*Regex.*/'));
+        $diff = array_diff(['testQueue', 'testRegexQueue', 'testQueueOne', 'testRegexQueueTwo', 'testQueueTwo'], $queueClient->listQueues());
+        $this->assertEmpty($diff);
+        $diff = array_diff(['testRegexQueue', 'testRegexQueueTwo'], $queueClient->listQueues('/.*Regex.*/'));
+        $this->assertEmpty($diff);
     }
 
     public function testQueueClientAddAliasWithEmptyAlias()
@@ -340,13 +315,13 @@ class QueueClientTest extends TestCase
     public function testQueueClientAddAlias()
     {
         $queueClient = $this->getQueueClient();
-
         $queueClient->createQueue('testQueueOne');
         $queueClient->createQueue('testQueueTwo');
-        $this->assertSame($queueClient, $queueClient->addAlias('testQueueOne', 'queueAlias')); //->isTestedInstance();
-        $this->assertSame($queueClient, $queueClient->addAlias('testQueueTwo', 'queueAlias')); //->isTestedInstance();
-        $this->assertEquals(['queueAlias' => ['testQueueOne', 'testQueueTwo']], $queueClient->getAliases());
-        //$this->assertArraySubset(['queueAlias' => ['testQueueOne', 'testQueueTwo']], $queueClient->getAliases());
+        $this->assertSame($queueClient, $queueClient->addAlias('testQueueOne', 'queueAlias'));
+        $this->assertSame($queueClient, $queueClient->addAlias('testQueueTwo', 'queueAlias'));
+        $mockAliases = ['queueAlias' => ['testQueueOne', 'testQueueTwo']];
+        $aliases = $queueClient->getAliases();
+        $this->assertEquals($mockAliases, $aliases);
     }
 
     public function testQueueClientRemoveAliasWithUndefinedAlias()
@@ -365,10 +340,9 @@ class QueueClientTest extends TestCase
         $queueClient->createQueue('testQueueTwo');
         $queueClient->addAlias('testQueueOne', 'queueAliasOne');
         $queueClient->addAlias('testQueueTwo', 'queueAliasTwo');
-        $this->assertSame($queueClient, $queueClient->removeAlias('queueAliasOne')); //->isTestedInstance();
+        $this->assertSame($queueClient, $queueClient->removeAlias('queueAliasOne'));
         $this->assertIsArray($queueClient->getAliases());
         $this->assertEquals(['queueAliasTwo' => ['testQueueTwo']], $queueClient->getAliases());
-        //$this->assertArraySubset(['queueAliasTwo' => ['testQueueTwo']], $queueClient->getAliases());
 
     }
 
@@ -383,7 +357,6 @@ class QueueClientTest extends TestCase
         $queueClient->addAlias('testQueueTwo', 'queueAliasTwo');
         $this->assertIsArray($queueClient->getAliases());
         $this->assertEquals(['queueAliasOne' => ['testQueueOne', 'testQueueTwo'], 'queueAliasTwo' => ['testQueueTwo']], $queueClient->getAliases());
-        //$this->assertArraySubset(['queueAliasOne' => ['testQueueOne', 'testQueueTwo'], 'queueAliasTwo' => ['testQueueTwo']], $queueClient->getAliases());
     }
 
     public function testQueueClientGetPriorityHandler()
