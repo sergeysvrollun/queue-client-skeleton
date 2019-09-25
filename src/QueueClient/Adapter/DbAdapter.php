@@ -20,9 +20,6 @@ use Zend\Db\Sql\Predicate\IsNull;
 use Zend\Db\Sql\Predicate\Predicate;
 use Zend\Db\Sql\Predicate\PredicateSet;
 use Zend\Db\Sql\Predicate\Expression as PredicateExpression;
-use Zend\Db\Sql\Where;
-use Zend\Db\TableGateway\Feature\RowGatewayFeature;
-use Zend\Db\TableGateway\TableGateway;
 use Zend\Db\Metadata\Source\Factory;
 use Zend\Db\Sql\Sql;
 
@@ -54,22 +51,22 @@ class DbAdapter extends AbstractAdapter implements AdapterInterface
     }
 
     /**
-     * @param string $queueName
-     *
-     * @return string
-     */
-    private function prepareTableName(string $queueName): string
-    {
-        return $queueName;
-    }
-
-    /**
      * @inheritdoc
      */
     public function listQueues($prefix = '')
     {
         $metadata = Factory::createSourceFromAdapter($this->db);
-        return $metadata->getTableNames();
+        $result = [];
+        foreach ($metadata->getTableNames() as $tableName) {
+            if (!empty($prefix) && !$this->startsWith($tableName, $prefix)) {
+                continue;
+            }
+            $result[] = $tableName;
+        }
+        $result = array_unique($result);
+        return $result;
+
+
     }
 
     /**
@@ -443,4 +440,27 @@ class DbAdapter extends AbstractAdapter implements AdapterInterface
     {
         return $this->priorityHandler;
     }
+
+    /**
+     * @param $haystack
+     * @param $needle
+     *
+     * @return bool
+     */
+    private function startsWith(string $haystack, string $needle): bool
+    {
+        return $needle === '' || strrpos($haystack, $needle, -strlen($haystack)) !== false;
+    }
+
+    /**
+     * @param string $queueName
+     *
+     * @return string
+     */
+    private function prepareTableName(string $queueName): string
+    {
+        return $queueName;
+    }
+
+
 }
