@@ -15,9 +15,11 @@ use UnexpectedValueException;
 use Zend\Db\Adapter\Adapter;
 use Zend\Db\Adapter\Driver\ResultInterface;
 use Zend\Db\ResultSet\ResultSet;
+use Zend\Db\Sql\Expression;
 use Zend\Db\TableGateway\Feature\RowGatewayFeature;
 use Zend\Db\TableGateway\TableGateway;
 use Zend\Db\Metadata\Source\Factory;
+use Zend\Db\Sql\Sql;
 
 class DbAdapter extends AbstractAdapter implements AdapterInterface
 {
@@ -213,13 +215,11 @@ class DbAdapter extends AbstractAdapter implements AdapterInterface
             throw new InvalidMessageException($message, 'Message priority not found in message.');
         }
 
-        $priority
-            = $this->priorityHandler->getPriorityByLevel($message['priority']);
+        $priority = $this->priorityHandler->getPriorityByLevel($message['priority']);
 
         if (!$this->isQueueExists($queueName)) {
             throw new QueueAccessException(
-                "Queue " . $queueName
-                . " doesn't exist, please create it before use it."
+                "Queue " . $queueName . " doesn't exist, please create it before use it."
             );
         }
 
@@ -255,13 +255,16 @@ class DbAdapter extends AbstractAdapter implements AdapterInterface
             );
         }
         $tableName = $this->prepareTableName($queueName);
-        $sql = "SELECT count(*) FROM $tableName ";
-        $params = [];
+        $sql = new Sql($this->db);
+        $select = $sql->select()
+            ->columns(['total' => new Expression('COUNT(*)')])
+            ->from($tableName);
         if (null !== $priority) {
-            $params[':priority_level'] = $priority->getLevel();
-            $sql .= " AND priority_level = :priority_level";
+            $select->where(['priority_level' => $priority->getLevel()]);
         }
-        $count = $this->db->query($sql, $params);
+        $statement = $sql->prepareStatementForSqlObject($select);
+        $results = $statement->execute();
+        $count = intval(($results->current())['total']);
         return $count > 0 ? false : true;
     }
 
@@ -307,14 +310,6 @@ class DbAdapter extends AbstractAdapter implements AdapterInterface
         if (empty($queueName)) {
             throw new InvalidArgumentException('Queue name empty or not defined.');
         }
-
-//        if (!$this->isQueueExists($queueName)) {
-//            throw new QueueAccessException(
-//                "Queue " . $queueName
-//                . " doesn't exist, please create it before using it."
-//            );
-//        }
-
         $tableName = $this->prepareTableName($queueName);
         $this->db->query("DROP TABLE IF EXISTS $tableName", Adapter::QUERY_MODE_EXECUTE);
         return $this;

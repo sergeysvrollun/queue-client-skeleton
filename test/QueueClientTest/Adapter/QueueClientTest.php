@@ -42,31 +42,36 @@ class QueueClientTest extends TestCase
      */
     public function tearDown(): void
     {
-        $queueClient = $this->getQueueClient();
-        $queueList = $queueClient->listQueues();
-        foreach ($queueList as $queue) {
-            $queueClient->deleteQueue($queue);
-        }
+//        $queueClient = $this->getQueueClient();
+//        $queueList = $queueClient->listQueues();
+//        foreach ($queueList as $queue) {
+//            $queueClient->deleteQueue($queue);
+//        }
     }
 
     public function testCreateDeleteQueue()
     {
         $queueClient = $this->getQueueClient();
+        $this->assertCount(0, $queueClient->listQueues());
         $queueClient->createQueue('testQueue');
-        $queues = $queueClient->listQueues();
-        $this->assertCount(1, $queues);
+        $this->assertCount(1, $queueClient->listQueues());
+        $queueClient->createQueue('testQueue2');
+        $this->assertCount(2, $queueClient->listQueues());
+        $queueClient->deleteQueue('testQueue');
+        $this->assertCount(1, $queueClient->listQueues());
+        $queueClient->deleteQueue('testQueue2');
+        $this->assertCount(0, $queueClient->listQueues());
+   }
 
-        $this->assertInstanceOf(
-            'ReputationVIP\QueueClient\QueueClientInterface',
-            $queueClient->deleteQueue('testQueue')
-        );
-    }
-
-//    public function testAddRemoveMessage()
-//    {
-//        $queueClient = $this->getQueueClient();
-//        $queueClient->addMessage('testQueue', 'testMessage');
+    public function testAddRemoveMessage()
+    {
+        $queueClient = $this->getQueueClient();
+        $queueClient->createQueue('testQueue');
+        $this->assertTrue($queueClient->isEmpty('testQueue'));
+        $queueClient->addMessage('testQueue', 'testMessage');
+        $this->assertFalse($queueClient->isEmpty('testQueue'));
 //        $queueClient->deleteMessage('testQueue', 'testMessage');
-//    }
+//        $this->assertTrue($queueClient->isEmpty('testQueue'));
+    }
 
 }
