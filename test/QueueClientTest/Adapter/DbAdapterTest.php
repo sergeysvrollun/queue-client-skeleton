@@ -13,7 +13,7 @@ use ReputationVIP\QueueClient\Exception\QueueAliasException;
 use ReputationVIP\QueueClient\PriorityHandler\ThreeLevelPriorityHandler;
 use ReputationVIP\QueueClient\QueueClient;
 
-class QueueClientTest extends TestCase
+class DbAdapterTest extends TestCase
 {
     public function getQueueClient(): QueueClient
     {

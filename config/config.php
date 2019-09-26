@@ -2,9 +2,17 @@
 
 declare(strict_types=1);
 
+use Symfony\Component\Dotenv\Dotenv;
 use Zend\ConfigAggregator\ArrayProvider;
 use Zend\ConfigAggregator\ConfigAggregator;
 use Zend\ConfigAggregator\PhpFileProvider;
+
+// Make environment variables stored in .env accessible via getenv(), $_ENV or $_SERVER.
+if (file_exists('.env')) {
+    (new Dotenv())->load('.env');
+}
+// Determine application environment ('dev' or 'prod').
+$appEnv = getenv('APP_ENV');
 
 // To enable or disable caching, set the `ConfigAggregator::ENABLE_CACHE` boolean in
 // `config/autoload/local.php`.
