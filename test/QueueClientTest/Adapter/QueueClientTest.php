@@ -31,9 +31,9 @@ class QueueClientTest extends TestCase
         foreach ($queueClient->listQueues() as $queue) {
             $queueClient->deleteQueue($queue);
         }
-        foreach ($queueClient->getAliases() as $alias) {
-            $queueClient->removeAlias($alias);
-        }
+//        foreach ($queueClient->getAliases() as $alias) {
+//            $queueClient->removeAlias($alias);
+//        }
     }
 
     /**
@@ -44,9 +44,6 @@ class QueueClientTest extends TestCase
         $queueClient = $this->getQueueClient();
         foreach ($queueClient->listQueues() as $queue) {
             $queueClient->deleteQueue($queue);
-        }
-        foreach ($queueClient->getAliases() as $alias) {
-            $queueClient->removeAlias($alias);
         }
     }
 
